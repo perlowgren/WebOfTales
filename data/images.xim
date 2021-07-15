@@ -1,0 +1,214 @@
+/**
+ * XImageMap, version: 0.10
+ * Format:
+ * {[nm|name='s'] [p|path='s'] [a|alpha=n] [ck|colorkey=n] [f|from=n] [t|to=n] [m|map=(n,n[,n,n[,n,n]]) ...]}
+ *
+ * Each imagemap-string can have the following values:
+ * nm='s' or name='s' - Name of the image.
+ * p='s' or path='s' - Filepath, where to load image.
+ * a=n or alpha=n - Alpha value where n is ranging 0-255 or 0x00-0xff, 0 is transparent, 255 is opaque.
+ * ck=n or colorkey=n - Colorkey, rgb, 0x000000 is black, 0xff0000 is red, -1 means image has no transparency.
+ * f=n or from=n - The start index for a set of images with the same mapping. Default is 1.
+ * t=n or to=n - The end index for a set of images with the same mapping. Default is 1.
+ * m=(rw,rh) or map=(rw,rh) - Map the whole image with rectangles of size rw x rh.
+ * m=(x,y,w,h) or map=(x,y,w,h) - Map one rectangle at x,y with size w x h.
+ * m=(x,y,w,h,rw,rh) or map=(x,y,w,h,rw,rh) - Map the specified area (x,y,w,h) with rectangles of size rw x rh.
+ *
+ * The file can be formatted in many ways, so it can be included with many programming languages. The parser
+ * excludes everything except values within quotes and brackets. The parser does accept escape sequences
+ * like \' or \". If a string continues on a following line it should end with a space (' '). Values
+ * within strings can be separated with any char except these [a-zA-Z0-9\'].
+ *
+ * It is possible to load a set of images with the same mapping. All strings are formatted so that
+ * hash-chars ('#') are replaced by the numbers within the set.
+ *
+ * Negative numbers are not parsed.
+ **/
+
+static char *images[] = {
+	"{nm='Clouds' p='images/terrain/clouds.png' alpha=128"
+		" m=(130,34,59,14)"			// 1. SmallCloud1
+		" m=(130,49,68,19)"			// 2. SmallCloud2
+		" m=(130,69,69,22)"			// 3. SmallCloud3
+		" m=(114,3,85,28)"			// 4. MediumCloud1
+		" m=(1,1,112,32)"				// 5. MediumCloud2
+		" m=(1,34,127,56)"			// 6. MediumCloud3
+		" m=(2,92,178,47)"			// 7. LargeCloud1
+		" m=(2,142,196,57)"			// 8. LargeCloud2
+	"}",
+	"{nm='Ground#' p='images/terrain/ground#.png' ck=-1 to=3 m=(128,32)}",
+	"{nm='Terrain#' p='images/terrain/terrain#.png' to=3 m=(128,32)}",
+	"{nm='Roads#' p='images/constr/roads#.png' m=(128,64)}",
+	"{nm='Cities#' p='images/constr/cities#.png' to=3}",
+	"{nm='Walls#' p='images/constr/walls#.png' m=(80,70)}",
+	"{nm='Houses#' p='images/constr/houses#.png' m=(128,80)}",
+	"{nm='NPC' p='images/sprites/npc.png'"
+		" m=(0,36,45,29)"				// 1. Wolf
+		" m=(0,65,45,25)"				// 2. Wolf Dead
+		" m=(0,0,48,36)"				// 3. Goblin 1
+		" m=(48,0,48,36)"				// 4. Goblin 2
+		" m=(96,0,52,36)"				// 5. Goblin 3
+		" m=(148,0,38,35)"			// 6. Goblin Dead
+	"}",
+	"{nm='Skin#' p='images/sprites/skin#.png' to=9 m=(24,55)}",
+	"{nm='Hair#' p='images/sprites/hair#.png' to=7 m=(16,25)}",
+	"{nm='Face#' p='images/sprites/face#.png' m=(16,25)}",
+	"{nm='Chest#' p='images/sprites/chest#.png' m=(24,55)}",
+	"{nm='Legs#' p='images/sprites/legs#.png' m=(24,32)}",
+	"{nm='Feet#' p='images/sprites/feet#.png' m=(24,20)}",
+	"{nm='Head#' p='images/sprites/head#.png' m=(16,25)}",
+	"{nm='Back#' p='images/sprites/back#.png' to=3 m=(24,55)}",
+	"{nm='Shadows' p='images/sprites/shadows.png' alpha=128"
+		" m=(1,1,19,11)"				// 1. Shadow1
+		" m=(21,1,29,10)"				// 2. Shadow2
+	"}",
+	"{nm='FaceIcons32' p='images/icons/faces32.png' ck=-1 m=(32,32)}",
+	"{nm='FaceIcons16' p='images/icons/faces16.png' ck=-1 m=(16,16)}",
+	"{nm='ItemIcons32' p='images/icons/items32.png' ck=-1 m=(32,32)}",
+	"{nm='ItemIcons16' p='images/icons/items16.png' ck=-1 m=(16,16)}",
+	"{nm='GUI' p='images/gui/gui.png'"
+		" m=(25,25,25,25)"			// 1. TopLeft, Plain
+		" m=(25,51,23,31)"			// 2. TopLeft, Caption
+		" m=(25,0,250,7)"				// 3. Top, Plain
+		" m=(25,7,250,16)"			// 4. Top, Caption
+		" m=(50,25,25,25)"			// 5. TopRight, Plain
+		" m=(50,51,23,31)"			// 6. TopRight, Caption
+		" m=(0,1,7,250)"				// 7. Left
+		" m=(2,1,7,250)"				// 8. Right
+		" m=(75,25,25,25)"			// 9. BottomLeft, Plain
+		" m=(75,51,23,31)"			// 10. BottomLeft, Caption
+		" m=(25,2,250,7)"				// 11. Bottom, Plain
+		" m=(25,9,250,16)"			// 12. Bottom, Caption
+		" m=(100,25,25,25)"			// 13. BottomRight, Plain
+		" m=(100,51,23,31)"			// 14. BottomRight, Caption
+		" m=(126,64,17,10)"			// 15. CloseButton, Plain
+		" m=(144,64,17,10)"			// 16. CloseButton, Active
+		" m=(162,64,17,10)"			// 17. CloseButton, Down
+		" m=(126,75,11,11)"			// 18. PlusButton, Plain
+		" m=(138,75,11,11)"			// 19. PlusButton, Active
+		" m=(150,75,11,11)"			// 20. PlusButton, Down
+		" m=(162,75,11,11)"			// 21. PlusButton, Disabled
+		" m=(126,25,4,4)"				// 22. Button TopLeft, Plain
+		" m=(130,25,30,4)"			// 23. Button Top, Plain
+		" m=(160,25,4,4)"				// 24. Button TopRight, Plain
+		" m=(126,29,4,30)"			// 25. Button Left, Plain
+		" m=(160,29,4,30)"			// 26. Button Right, Plain
+		" m=(126,59,4,4)"				// 27. Button BottomLeft, Plain
+		" m=(130,59,30,4)"			// 28. Button Bottom, Plain
+		" m=(160,59,4,4)"				// 29. Button BottomRight, Plain
+		" m=(130,29,30,30)"			// 30. Button Center, Plain
+		" m=(165,25,4,4)"				// 31. Button TopLeft, Active
+		" m=(169,25,30,4)"			// 32. Button Top, Active
+		" m=(199,25,4,4)"				// 33. Button TopRight, Active
+		" m=(165,29,4,30)"			// 34. Button Left, Active
+		" m=(199,29,4,30)"			// 35. Button Right, Active
+		" m=(165,59,4,4)"				// 36. Button BottomLeft, Active
+		" m=(169,59,30,4)"			// 37. Button Bottom, Active
+		" m=(199,59,4,4)"				// 38. Button BottomRight, Active
+		" m=(169,29,30,30)"			// 39. Button Center, Active
+		" m=(204,25,4,4)"				// 40. Button TopLeft, Down
+		" m=(208,25,30,4)"			// 41. Button Top, Down
+		" m=(238,25,4,4)"				// 42. Button TopRight, Down
+		" m=(204,29,4,30)"			// 43. Button Left, Down
+		" m=(238,29,4,30)"			// 44. Button Right, Down
+		" m=(204,59,4,4)"				// 45. Button BottomLeft, Down
+		" m=(208,59,30,4)"			// 46. Button Bottom, Down
+		" m=(238,59,4,4)"				// 47. Button BottomRight, Down
+		" m=(208,29,30,30)"			// 48. Button Center, Down
+		" m=(243,25,4,4)"				// 49. Button TopLeft, Disabled
+		" m=(247,25,30,4)"			// 50. Button Top, Disabled
+		" m=(277,25,4,4)"				// 51. Button TopRight, Disabled
+		" m=(243,29,4,30)"			// 52. Button Left, Disabled
+		" m=(277,29,4,30)"			// 53. Button Right, Disabled
+		" m=(243,59,4,4)"				// 54. Button BottomLeft, Disabled
+		" m=(247,59,30,4)"			// 55. Button Bottom, Disabled
+		" m=(277,59,4,4)"				// 56. Button BottomRight, Disabled
+		" m=(247,29,30,30)"			// 57. Button Center, Disabled
+		" m=(126,25,38,38)"			// 58. IconButton, Plain
+		" m=(165,25,38,38)"			// 59. IconButton, Active
+		" m=(204,25,38,38)"			// 60. IconButton, Down
+		" m=(243,25,38,38)"			// 61. IconButton, Disabled
+		" m=(180,64,14,14)"			// 62. Scroll Up, Plain
+		" m=(195,64,14,14)"			// 63. Scroll Up, Active
+		" m=(210,64,14,14)"			// 64. Scroll Up, Down
+		" m=(225,64,14,14)"			// 65. Scroll Down, Plain
+		" m=(240,64,14,14)"			// 66. Scroll Down, Active
+		" m=(255,64,14,14)"			// 67. Scroll Down, Down
+		" m=(180,79,14,14)"			// 68. Scroll Left, Plain
+		" m=(195,79,14,14)"			// 69. Scroll Left, Active
+		" m=(210,79,14,14)"			// 70. Scroll Left, Down
+		" m=(225,79,14,14)"			// 71. Scroll Right, Plain
+		" m=(240,79,14,14)"			// 72. Scroll Right, Active
+		" m=(255,79,14,14)"			// 73. Scroll Right, Down
+		" m=(180,94,14,14)"			// 74. Scroll Slide, Plain
+		" m=(195,94,14,14)"			// 75. Scroll Slide, Active
+		" m=(210,94,14,14)"			// 76. Scroll Slide, Down
+		" m=(9,1,14,250)"				// 77. Scroll Vertical Slidebar
+		" m=(25,9,250,14)"			// 78. Scroll Horizontal Slidebar
+		" m=(25,87,5,23)"				// 79. Top tabset, Inactive, left edge of first tab
+		" m=(31,87,5,23)"				// 80. Top tabset, Active, left edge
+		" m=(37,87,10,23)"			// 81. Top tabset, Inactive to inactive, section between two tabs
+		" m=(48,87,10,23)"			// 82. Top tabset, Inctive to active, section between two tabs
+		" m=(59,87,10,23)"			// 83. Top tabset, Active to inactive, section between two tabs
+		" m=(70,87,9,23)"				// 84. Top tabset, Inactive, right edge o last tab
+		" m=(80,87,9,23)"				// 85. Top tabset, Active, right edge o last tab
+		" m=(25,111,250,23)"			// 86. Top tabset, Inactive tab bar
+		" m=(25,135,250,23)"			// 87. Top tabset, Active tab bar
+		" m=(91,87,5,23)"				// 88. Bottom tabset, Inactive, left edge of first tab
+		" m=(97,87,5,23)"				// 89. Bottom tabset, Active, left edge
+		" m=(103,87,10,23)"			// 90. Bottom tabset, Inactive to inactive, section between two tabs
+		" m=(114,87,10,23)"			// 91. Bottom tabset, Inctive to active, section between two tabs
+		" m=(125,87,10,23)"			// 92. Bottom tabset, Active to inactive, section between two tabs
+		" m=(136,87,9,23)"			// 93. Bottom tabset, Inactive, right edge o last tab
+		" m=(146,87,9,23)"			// 94. Bottom tabset, Active, right edge o last tab
+		" m=(25,159,250,23)"			// 95. Bottom tabset, Inactive tab bar
+		" m=(25,183,250,23)"			// 96. Bottom tabset, Active tab bar
+		" m=(25,207,2,2)"				// 97. ToolTip, TopLeft
+		" m=(27,207,246,2)"			// 98. ToolTip, Top
+		" m=(273,207,2,2)"			// 99. ToolTip, TopRight
+		" m=(25,209,2,108)"			// 100. ToolTip, Left
+		" m=(273,209,2,108)"			// 101. ToolTip, Right
+		" m=(25,317,2,2)"				// 102. ToolTip, BottomLeft
+		" m=(27,317,246,2)"			// 103. ToolTip, Bottom
+		" m=(273,317,2,2)"			// 104. ToolTip, BottomRight
+		" m=(27,209,246,108)"		// 105. ToolTip, Center Background
+		" m=(157,87,7,7)"				// 106. Attribute Points Dot
+		" m=(289,1,30,231,30,11)"	// 107. Attribute or Skill value
+	"}",
+	"{nm='ChrGui' p='images/gui/chr.png'"
+		" m=(0,19,165,51)"			// 1. Char Frame
+		" m=(0,70,151,51)"			// 2. Target Frame
+		" m=(0,12,100,7)"				// 3. Health Bar
+		" m=(100,12,100,7)"			// 4. Mana Bar
+		" m=(165,19,4,20)"			// 5. Stamina Bar
+		" m=(0,0,237,6)"				// 6. Attack XP Bar (on Panel)
+		" m=(0,6,237,6)"				// 7. Level XP Bar (on Panel)
+	"}",
+	"{nm='IncDlg' p='images/gui/incdlg.png' ck=-1}",
+	"{nm='ChrDlg' p='images/gui/chrdlg.png' ck=-1 m=(296,267)}",
+	"{nm='BtlDlg' p='images/gui/btldlg.png' ck=-1"
+		" m=(0,0,130,47)"				// 1. Big Left
+		" m=(128,0,130,47)"			// 2. Big Right
+		" m=(0,45,130,28)"			// 3. Small Left
+		" m=(128,45,130,28)"			// 4. Small Right
+	"}",
+	"{nm='Buttons' p='images/gui/buttons.png' m=(16,16)}",
+	"{nm='Icons' p='images/icons/icons.png' m=(32,32)}",
+	"{nm='BattleIcons' p='images/icons/battle.png'"
+		" m=(0,0,64,32,32,32)"		// 1. Face Icon Markers
+		" m=(0,64,64,4,32,4)"		// 2. HP & LP Bars
+		" m=(64,0,16,32,16,16)"		// 3. Face Icon Markers, Small
+		" m=(64,64,16,4,16,2)"		// 4. HP & LP Bars, Small
+		" m=(0,32,80,32,16,16)"		// 2. Battle Icons
+	"}",
+	"{nm='Markers' p='images/markers.png'"
+		" m=(0,0,16,16,8,8)"			// 1. Map marker
+		" m=(16,0,80,16,16,16)"		// 2. Walk markers
+	"}",
+	"{nm='ChatBg' p='images/chatbg.png' alpha=128 ck=-1}",
+	"{nm='MainFrame' p='images/mainframe.png'"
+		" m=(0,0,800,18)"				// 1. Top
+		" m=(0,18,800,34)"			// 2. Bottom
+	"}",
+	"{nm='Icon16' p='images/icons/icon16.png' ck=-1}",
+};
